@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#635bff" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Weekly Owner Report — Litpax</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="tb-left">
+        <div class="brand-mark sm">L</div>
+        <div>
+          <div class="tb-title">Weekly Owner Report</div>
+          <div class="tb-sub muted">Litpax Technology</div>
+        </div>
+      </div>
+      <div class="tb-right no-print">
+        <select id="weekSelect" class="input select" aria-label="Select week"></select>
+        <button id="printBtn" class="btn btn-ghost">Print / PDF</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <div id="weekHeader" class="week-header fade-in"></div>
+      <section id="report" class="report">
+        <div class="skeleton"></div><div class="skeleton"></div>
+        <div class="skeleton"></div><div class="skeleton"></div>
+      </section>
+    </main>
+
+    <footer class="foot muted no-print">Litpax Technology &middot; Weekly Overview</footer>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
