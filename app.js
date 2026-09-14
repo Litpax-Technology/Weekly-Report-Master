@@ -2,6 +2,21 @@
 
 const state = { week: null };
 
+/* ---------- source colours (naya app add hote hi apne aap rang mil jayega) ---------- */
+const SOURCE_ORDER = ['ERP', 'IMS', 'Service', 'Repair', 'Courier', 'SOMS'];
+const SOURCE_COLORS = {
+  ERP:     { c: '#635bff', bg: '#eef0ff' },
+  IMS:     { c: '#0d9488', bg: '#e6fbf7' },
+  Service: { c: '#ea580c', bg: '#fff1e8' },
+  Repair:  { c: '#9333ea', bg: '#f6ecfe' },
+  Courier: { c: '#0284c7', bg: '#e6f5fe' },
+  SOMS:    { c: '#c026d3', bg: '#fdebff' }
+};
+const FALLBACK = [{ c: '#2563eb', bg: '#eaf1ff' }, { c: '#16a34a', bg: '#eafbf0' },
+                  { c: '#d97706', bg: '#fff6e6' }, { c: '#db2777', bg: '#fdeef6' }];
+function sourceMeta(src, idx) { return SOURCE_COLORS[src] || FALLBACK[idx % FALLBACK.length]; }
+function srcRank(s) { const i = SOURCE_ORDER.indexOf(s); return i === -1 ? 99 : i; }
+
 /* ---------- JSONP with timeout ---------- */
 function api(action, params = {}) {
   return new Promise((resolve, reject) => {
@@ -64,6 +79,7 @@ function emptyState(title, sub) {
   return `<div class="all-clear" style="background:#fff;border-color:var(--border);color:var(--text)">
     <div><b>${esc(title)}</b><div class="muted" style="margin-top:4px">${sub}</div></div></div>`;
 }
+function isFlagged(x) { const b = sev(x.Status); return b === 'red' || b === 'amber' || b === 'grey'; }
 
 /* ---------- Weeks dropdown ---------- */
 async function loadWeeks(selectStart) {
@@ -99,6 +115,24 @@ async function loadReport(week) {
   } catch (e) { rep.innerHTML = emptyState('Could not load', e.message); }
 }
 
+function metricCard(x) {
+  const bucket = sev(x.Status);
+  const flag = bucket === 'red' ? 'flag-red' : bucket === 'amber' ? 'flag-amber' : bucket === 'green' ? 'flag-green' : '';
+  const dev = x.DeviationPct;
+  let arrow = '';
+  if (dev !== '' && dev != null && !isNaN(Number(dev)) && Number(dev) !== 0) {
+    const up = Number(dev) > 0;
+    arrow = `<span class="m-arrow ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(Number(dev))}%</span>`;
+  }
+  const pill = (bucket === 'red' || bucket === 'amber')
+    ? `<span class="pill ${bucket}">${statusText(x.Status)}</span>` : '';
+  return `<div class="metric ${flag}">
+    <div class="m-label">${esc(x.Label)}${pill}</div>
+    <div class="m-main"><span class="m-val">${fmtNum(x.Value, x.Label)}</span>${arrow}</div>
+    <div class="m-base">${baseNote(x)}</div>
+  </div>`;
+}
+
 function renderReport(r) {
   const rows = r.rows || [];
   document.getElementById('weekHeader').innerHTML =
@@ -111,10 +145,10 @@ function renderReport(r) {
     return;
   }
 
-  const attn = rows.filter(x => ['red', 'amber', 'grey'].indexOf(sev(x.Status)) !== -1)
-    .sort((a, b) => rank(a.Status) - rank(b.Status));
-
   let html = '';
+
+  /* ---- Layer 1: attention band (cross-app, severity sorted) ---- */
+  const attn = rows.filter(isFlagged).sort((a, b) => rank(a.Status) - rank(b.Status));
   html += `<div class="section-title attn"><span class="dot"></span>Needs Attention This Week</div>`;
   if (!attn.length) {
     html += `<div class="all-clear">✓ All clear — nothing abnormal across the tracked areas this week.</div>`;
@@ -137,27 +171,37 @@ function renderReport(r) {
     html += '</div>';
   }
 
-  const depts = {};
-  rows.forEach(x => { (depts[x.Department] = depts[x.Department] || []).push(x); });
-  Object.keys(depts).forEach(dep => {
-    html += `<div class="section-title"><span class="dot"></span>${esc(dep)}</div>`;
-    html += `<div class="dept-block"><div class="dept-rows">`;
-    depts[dep].forEach(x => {
-      const bucket = sev(x.Status);
-      const flag = bucket === 'red' ? 'flag-red' : bucket === 'amber' ? 'flag-amber' : bucket === 'green' ? 'flag-green' : '';
-      const dev = x.DeviationPct;
-      let arrow = '';
-      if (dev !== '' && dev != null && !isNaN(Number(dev)) && Number(dev) !== 0) {
-        const up = Number(dev) > 0;
-        arrow = `<span class="m-arrow ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(Number(dev))}%</span>`;
-      }
-      html += `<div class="metric ${flag}">
-        <div class="m-label">${esc(x.Label)}</div>
-        <div class="m-main"><span class="m-val">${fmtNum(x.Value, x.Label)}</span>${arrow}</div>
-        <div class="m-base">${baseNote(x)}</div>
+  /* ---- Layer 2: ek panel per app (ERP / IMS / Service ...) ---- */
+  const bySource = {};
+  rows.forEach(x => (bySource[x.Source || 'Other'] = bySource[x.Source || 'Other'] || []).push(x));
+  const sources = Object.keys(bySource).sort((a, b) => srcRank(a) - srcRank(b) || a.localeCompare(b));
+
+  sources.forEach((src, si) => {
+    const meta = sourceMeta(src, si);
+    const list = bySource[src];
+    const flagged = list.filter(isFlagged).length;
+    const countTxt = flagged ? flagged + ' need attention' : 'all normal';
+
+    html += `<div class="src-panel" style="--sc:${meta.c};--sbg:${meta.bg}">
+      <div class="src-head">
+        <span class="src-badge">${esc(src.charAt(0))}</span>
+        <span class="src-name">${esc(src)}</span>
+        <span class="src-count ${flagged ? 'has' : ''}">${countTxt}</span>
       </div>`;
+
+    const byDept = {};
+    list.forEach(x => (byDept[x.Department || ''] = byDept[x.Department || ''] || []).push(x));
+    const depts = Object.keys(byDept);
+    const multi = depts.length > 1;
+
+    depts.forEach(dep => {
+      if (multi && dep) html += `<div class="dept-label">${esc(dep)}</div>`;
+      html += `<div class="dept-rows">`;
+      byDept[dep].forEach(x => html += metricCard(x));
+      html += `</div>`;
     });
-    html += `</div></div>`;
+
+    html += `</div>`;
   });
 
   document.getElementById('report').innerHTML = html;
