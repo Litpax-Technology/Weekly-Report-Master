@@ -1,6 +1,6 @@
 const CONFIG = {
   // Paste the GAS Web App /exec URL here after deploying Code.gs
-  API_URL: 'https://script.google.com/macros/s/AKfycbwoKa9lP8yMBgQmj_DfRqOesCl8pKVQgLV4VmqzRC6bLds6_q2IQypm_eRaxtaN8I8eKg/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycby4mPJMozjXk7lCBzN7rlghEdVqYUdGMezCScsL7G14BiB9-ulYcOgKQ1zdVUEQHewt/exec',
   APP_NAME: 'Weekly Owner Report',
   COMPANY: 'Litpax Technology'
 };
