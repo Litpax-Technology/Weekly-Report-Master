@@ -2,7 +2,7 @@
 
 const state = { week: null };
 
-/* ---------- source colours (naya app add hote hi apne aap rang mil jayega) ---------- */
+/* ---------- source colours (naya app add hote hi apne aap rang) ---------- */
 const SOURCE_ORDER = ['ERP', 'IMS', 'Service', 'Repair', 'Courier', 'SOMS'];
 const SOURCE_COLORS = {
   ERP:     { c: '#635bff', bg: '#eef0ff' },
@@ -17,7 +17,7 @@ const FALLBACK = [{ c: '#2563eb', bg: '#eaf1ff' }, { c: '#16a34a', bg: '#eafbf0'
 function sourceMeta(src, idx) { return SOURCE_COLORS[src] || FALLBACK[idx % FALLBACK.length]; }
 function srcRank(s) { const i = SOURCE_ORDER.indexOf(s); return i === -1 ? 99 : i; }
 
-/* ---------- JSONP with timeout ---------- */
+/* ---------- JSONP ---------- */
 function api(action, params = {}) {
   return new Promise((resolve, reject) => {
     const cb = 'jp_' + Math.random().toString(36).slice(2);
@@ -33,7 +33,6 @@ function api(action, params = {}) {
   });
 }
 
-/* ---------- Toast ---------- */
 function toast(msg, ok = true) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'toast show ' + (ok ? 'ok' : 'bad');
@@ -80,8 +79,13 @@ function emptyState(title, sub) {
     <div><b>${esc(title)}</b><div class="muted" style="margin-top:4px">${sub}</div></div></div>`;
 }
 function isFlagged(x) { const b = sev(x.Status); return b === 'red' || b === 'amber' || b === 'grey'; }
+function arrowHtml(dev) {
+  if (dev === '' || dev == null || isNaN(Number(dev)) || Number(dev) === 0) return '';
+  const up = Number(dev) > 0;
+  return `<span class="m-arrow ${up ? 'up' : 'down'}">${up ? '▲' : '▼'}${Math.abs(Number(dev))}%</span>`;
+}
 
-/* ---------- Weeks dropdown ---------- */
+/* ---------- Weeks ---------- */
 async function loadWeeks(selectStart) {
   try {
     const r = await api('getWeeks');
@@ -107,7 +111,7 @@ async function loadWeeks(selectStart) {
 async function loadReport(week) {
   state.week = week;
   const rep = document.getElementById('report');
-  rep.innerHTML = '<div class="skeleton"></div>'.repeat(4);
+  rep.innerHTML = '<div class="skeleton"></div>'.repeat(3);
   try {
     const r = await api('getReport', { week });
     if (!r.ok) return toast(r.message || 'Load failed', false);
@@ -115,21 +119,16 @@ async function loadReport(week) {
   } catch (e) { rep.innerHTML = emptyState('Could not load', e.message); }
 }
 
-function metricCard(x) {
+/* compact one-line metric row */
+function metricRow(x) {
   const bucket = sev(x.Status);
   const flag = bucket === 'red' ? 'flag-red' : bucket === 'amber' ? 'flag-amber' : bucket === 'green' ? 'flag-green' : '';
-  const dev = x.DeviationPct;
-  let arrow = '';
-  if (dev !== '' && dev != null && !isNaN(Number(dev)) && Number(dev) !== 0) {
-    const up = Number(dev) > 0;
-    arrow = `<span class="m-arrow ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(Number(dev))}%</span>`;
-  }
   const pill = (bucket === 'red' || bucket === 'amber')
     ? `<span class="pill ${bucket}">${statusText(x.Status)}</span>` : '';
-  return `<div class="metric ${flag}">
-    <div class="m-label">${esc(x.Label)}${pill}</div>
-    <div class="m-main"><span class="m-val">${fmtNum(x.Value, x.Label)}</span>${arrow}</div>
-    <div class="m-base">${baseNote(x)}</div>
+  return `<div class="mrow ${flag}">
+    <span class="mr-label">${esc(x.Label)}${pill}</span>
+    <span class="mr-base">${baseNote(x)}</span>
+    <span class="mr-val">${fmtNum(x.Value, x.Label)}${arrowHtml(x.DeviationPct)}</span>
   </div>`;
 }
 
@@ -147,31 +146,29 @@ function renderReport(r) {
 
   let html = '';
 
-  /* ---- Layer 1: attention band (cross-app, severity sorted) ---- */
+  /* ---- Attention (compact list) ---- */
   const attn = rows.filter(isFlagged).sort((a, b) => rank(a.Status) - rank(b.Status));
-  html += `<div class="section-title attn"><span class="dot"></span>Needs Attention This Week</div>`;
+  html += `<div class="section-title attn"><span class="dot"></span>Needs Attention This Week
+    ${attn.length ? `<span class="count-chip">${attn.length}</span>` : ''}</div>`;
   if (!attn.length) {
-    html += `<div class="all-clear">✓ All clear — nothing abnormal across the tracked areas this week.</div>`;
+    html += `<div class="all-clear">✓ All clear — nothing abnormal this week.</div>`;
   } else {
-    html += '<div class="attn-grid">';
+    html += '<div class="attn-list">';
     attn.forEach(x => {
       const bucket = sev(x.Status);
-      html += `<div class="attn-card ${bucket}">
-        <div class="ac-top">
-          <div>
-            <div class="ac-label">${esc(x.Label)}</div>
-            <div class="ac-dept">${esc(x.Source)} · ${esc(x.Department)}</div>
-          </div>
-          <span class="pill ${bucket === 'grey' ? 'grey' : bucket}">${statusText(x.Status)}</span>
-        </div>
-        <div class="ac-val">${fmtNum(x.Value, x.Label)}</div>
-        <div class="ac-note">${esc(x.Note || baseNote(x))}</div>
+      html += `<div class="attn-row ${bucket}">
+        <span class="pill ${bucket === 'grey' ? 'grey' : bucket}">${statusText(x.Status)}</span>
+        <span class="ar-mid">
+          <span class="ar-label">${esc(x.Label)}</span>
+          <span class="ar-sub">${esc(x.Source)} · ${esc(x.Department)}${x.Note ? ' · ' + esc(x.Note) : ''}</span>
+        </span>
+        <span class="ar-val">${fmtNum(x.Value, x.Label)}</span>
       </div>`;
     });
     html += '</div>';
   }
 
-  /* ---- Layer 2: ek panel per app (ERP / IMS / Service ...) ---- */
+  /* ---- One collapsible panel per app ---- */
   const bySource = {};
   rows.forEach(x => (bySource[x.Source || 'Other'] = bySource[x.Source || 'Other'] || []).push(x));
   const sources = Object.keys(bySource).sort((a, b) => srcRank(a) - srcRank(b) || a.localeCompare(b));
@@ -180,14 +177,16 @@ function renderReport(r) {
     const meta = sourceMeta(src, si);
     const list = bySource[src];
     const flagged = list.filter(isFlagged).length;
-    const countTxt = flagged ? flagged + ' need attention' : 'all normal';
+    const openAttr = flagged ? ' open' : '';                 // gadbad wala khula, normal band
 
-    html += `<div class="src-panel" style="--sc:${meta.c};--sbg:${meta.bg}">
-      <div class="src-head">
+    html += `<details class="src-panel"${openAttr} style="--sc:${meta.c};--sbg:${meta.bg}">
+      <summary class="src-head">
         <span class="src-badge">${esc(src.charAt(0))}</span>
         <span class="src-name">${esc(src)}</span>
-        <span class="src-count ${flagged ? 'has' : ''}">${countTxt}</span>
-      </div>`;
+        <span class="src-count ${flagged ? 'has' : ''}">${flagged ? flagged + ' to check' : 'all normal'}</span>
+        <span class="src-chev">▾</span>
+      </summary>
+      <div class="src-body">`;
 
     const byDept = {};
     list.forEach(x => (byDept[x.Department || ''] = byDept[x.Department || ''] || []).push(x));
@@ -196,23 +195,23 @@ function renderReport(r) {
 
     depts.forEach(dep => {
       if (multi && dep) html += `<div class="dept-label">${esc(dep)}</div>`;
-      html += `<div class="dept-rows">`;
-      byDept[dep].forEach(x => html += metricCard(x));
+      html += `<div class="mrows">`;
+      byDept[dep].forEach(x => html += metricRow(x));
       html += `</div>`;
     });
 
-    html += `</div>`;
+    html += `</div></details>`;
   });
 
   document.getElementById('report').innerHTML = html;
 }
 
-/* ---------- Wire up ---------- */
-document.getElementById('printBtn').onclick = () => window.print();
+/* ---------- Wire ---------- */
+document.getElementById('printBtn').onclick = () => {
+  document.querySelectorAll('details.src-panel').forEach(d => d.open = true);   // print me sab khol do
+  window.print();
+};
 document.getElementById('weekSelect').addEventListener('change', e => loadReport(e.target.value));
 
-/* ---------- Start ---------- */
 loadWeeks();
-
-/* ---------- PWA ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
