@@ -15,7 +15,7 @@ function api(action, params = {}) {
   return new Promise((resolve, reject) => {
     const cb = 'jp_' + Math.random().toString(36).slice(2);
     const s = document.createElement('script');
-    const timer = setTimeout(() => { cleanup(); reject(new Error('Network timeout')); }, 30000);
+    const timer = setTimeout(() => { cleanup(); reject(new Error('Network timeout')); }, 45000);
     function cleanup() { clearTimeout(timer); delete window[cb]; s.remove(); }
     window[cb] = (res) => { cleanup(); resolve(res); };
     const qs = Object.keys(params).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k])).join('&');
@@ -68,14 +68,23 @@ async function loadWeeks(selectStart) {
 }
 function card(t, s) { return `<div class="notice"><b>${esc(t)}</b><div class="muted">${esc(s)}</div></div>`; }
 
-async function loadReport(week) {
+async function loadReport(week, attempt) {
+  attempt = attempt || 1;
   state.week = week;
   document.getElementById('report').innerHTML = '<div class="skeleton"></div>'.repeat(2);
   try {
     const r = await api('getReport', { week });
-    if (!r.ok) return;
+    if (!r.ok) { document.getElementById('report').innerHTML = retryCard(r.message || 'Load failed', week); return; }
     renderReport(r);
-  } catch (e) { document.getElementById('report').innerHTML = card('Could not load', e.message); }
+  } catch (e) {
+    if (attempt < 3) { return loadReport(week, attempt + 1); }   // transient timeout — retry
+    document.getElementById('report').innerHTML = retryCard(e.message, week);
+  }
+}
+function retryCard(msg, week) {
+  return `<div class="notice"><b>Could not load</b>
+    <div class="muted">${esc(msg)}</div>
+    <button class="btn btn-ghost" style="margin-top:12px" onclick="loadReport('${esc(week)}')">Try again</button></div>`;
 }
 
 function tile(x, accent) {
